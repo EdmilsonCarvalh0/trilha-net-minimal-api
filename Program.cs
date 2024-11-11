@@ -31,7 +31,8 @@ app.MapGet("/", () => Results.Json(new Home())).WithTags("Home");
 #endregion
 
 #region Administradores
-app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, IAdministradorServico administradorServico) => {
+app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, 
+                                        IAdministradorServico administradorServico) => {
     if(administradorServico.Login(loginDTO) != null)
     {
         return Results.Ok("Login com sucesso");
@@ -44,7 +45,38 @@ app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, IAdministra
 #endregion
 
 #region Veiculos
+ErrosDeValidacao ValidaDTO(VeiculoDTO veiculoDTO)
+{
+    var validacao = new ErrosDeValidacao{
+        Mensagens = new List<string>()
+    };
+    
+    if(string.IsNullOrEmpty(veiculoDTO.Nome))
+    {
+        validacao.Mensagens.Add("O nome não pode ficar em branco.");
+    }
+
+    if(string.IsNullOrEmpty(veiculoDTO.Marca))
+    {
+        validacao.Mensagens.Add("A marca não pode ficar em branco.");
+    }
+    
+    if(veiculoDTO.Ano < 1950)
+    {
+        validacao.Mensagens.Add("Veiculo muito antigo, aceito somente anos superiores a 1950.");
+    }
+
+    return validacao;
+}
+
 app.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) => {
+    
+    var validacao = ValidaDTO(veiculoDTO);
+    if(validacao.Mensagens.Count > 0)
+    {
+        return Results.BadRequest(validacao);
+    }
+
     var veiculo = new Veiculo{
         Nome = veiculoDTO.Nome,
         Marca = veiculoDTO.Marca,
@@ -69,10 +101,17 @@ app.MapGet("/veiculos/{id}", ([FromRoute] int id, IVeiculoServico veiculoServico
     return Results.Ok(veiculo);
 }).WithTags("Veiculos");
 
-app.MapPut("/veiculos/{id}", ([FromRoute] int id, VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) => {
+app.MapPut("/veiculos/{id}", ([FromRoute] int id, VeiculoDTO veiculoDTO, 
+                                IVeiculoServico veiculoServico) => {
     var veiculo = veiculoServico.BuscarPorId(id);
     if (veiculo == null) return Results.NotFound();
 
+    var validacao = ValidaDTO(veiculoDTO);
+    if(validacao.Mensagens.Count > 0)
+    {
+        return Results.BadRequest(validacao);
+    }
+   
     veiculo.Nome = veiculoDTO.Nome;
     veiculo.Marca = veiculoDTO.Marca;
     veiculo.Ano = veiculoDTO.Ano;
