@@ -6,6 +6,7 @@ using MinimalApi.Dominio.Servicos;
 using Microsoft.AspNetCore.Mvc;
 using MinimalApi.Dominio.ModelViews;
 using MinimalApi.Dominio.Entidades;
+using MinimalApi.Dominio.Enums;
 
 #region Builder
 var builder = WebApplication.CreateBuilder(args);
@@ -31,8 +32,7 @@ app.MapGet("/", () => Results.Json(new Home())).WithTags("Home");
 #endregion
 
 #region Administradores
-app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, 
-                                        IAdministradorServico administradorServico) => {
+app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, IAdministradorServico administradorServico) => {
     if(administradorServico.Login(loginDTO) != null)
     {
         return Results.Ok("Login com sucesso");
@@ -41,6 +41,60 @@ app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO,
     {
         return Results.Unauthorized();
     }
+}).WithTags("Administradores");
+
+app.MapGet("/administradores", ([FromQuery] int? pagina, IAdministradorServico administradorServico) => {
+    var adms = new List<AdministradorModelView>();
+    var administradores = administradorServico.Todos(pagina);
+    foreach (var adm in administradores)
+    {
+        adms.Add(new AdministradorModelView{
+            Id = adm.Id,
+            Email = adm.Email,
+            Perfil = adm.Perfil
+        });
+    }
+    return Results.Ok(adms);
+}).WithTags("Administradores");
+
+app.MapGet("/administradores/{id}", ([FromRoute] int id, IAdministradorServico administradorServico) => {
+    var administrador = administradorServico.BuscarPorId(id);
+    if (administrador == null) return Results.NotFound();
+    return Results.Ok(new AdministradorModelView{
+            Id = administrador.Id,
+            Email = administrador.Email,
+            Perfil = administrador.Perfil
+        });
+}).WithTags("Administradores");
+
+app.MapPost("/administradores", ([FromBody] AdministradorDTO administradorDTO, 
+                                        IAdministradorServico administradorServico) => {
+    var validacao = new ErrosDeValidacao{
+        Mensagens = new List<string>()
+    };
+
+    if (string.IsNullOrEmpty(administradorDTO.Email))
+        validacao.Mensagens.Add("Email não pode estar em branco.");
+    if (string.IsNullOrEmpty(administradorDTO.Senha))
+        validacao.Mensagens.Add("Senha não pode estar em branco.");
+    if (administradorDTO.Perfil == null)
+        validacao.Mensagens.Add("Perfil não pode estar em branco.");
+
+    if(validacao.Mensagens.Count > 0)
+        return Results.BadRequest(validacao);
+
+    var administrador = new Administrador{
+        Email = administradorDTO.Email,
+        Senha = administradorDTO.Senha,
+        Perfil = administradorDTO.Perfil.ToString() ?? Perfil.Editor.ToString()
+    };
+    administradorServico.Incluir(administrador);
+
+    return Results.Created($"/administrador/{administrador.Id}", new AdministradorModelView{
+        Id = administrador.Id,
+        Email = administrador.Email,
+        Perfil = administrador.Perfil
+    });
 }).WithTags("Administradores");
 #endregion
 
@@ -52,25 +106,16 @@ ErrosDeValidacao ValidaDTO(VeiculoDTO veiculoDTO)
     };
     
     if(string.IsNullOrEmpty(veiculoDTO.Nome))
-    {
         validacao.Mensagens.Add("O nome não pode ficar em branco.");
-    }
-
     if(string.IsNullOrEmpty(veiculoDTO.Marca))
-    {
         validacao.Mensagens.Add("A marca não pode ficar em branco.");
-    }
-    
     if(veiculoDTO.Ano < 1950)
-    {
         validacao.Mensagens.Add("Veiculo muito antigo, aceito somente anos superiores a 1950.");
-    }
 
     return validacao;
 }
 
 app.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) => {
-    
     var validacao = ValidaDTO(veiculoDTO);
     if(validacao.Mensagens.Count > 0)
     {
@@ -95,9 +140,7 @@ app.MapGet("/veiculos", ([FromQuery]int? pagina, IVeiculoServico veiculoServico)
 
 app.MapGet("/veiculos/{id}", ([FromRoute] int id, IVeiculoServico veiculoServico) => {
     var veiculo = veiculoServico.BuscarPorId(id);
-
     if (veiculo == null) return Results.NotFound();
-
     return Results.Ok(veiculo);
 }).WithTags("Veiculos");
 
